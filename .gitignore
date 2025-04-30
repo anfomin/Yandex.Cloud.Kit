@@ -1,0 +1,21 @@
+# Build
+bin
+obj
+/artifacts
+
+# User-specific files
+*.suo
+*.user
+*.ide
+*.log
+*.publishsettings
+/.idea/shelf/
+/.idea/httpRequests/
+/.idea/**/workspace.xml
+/.idea/**/tasks.xml
+/.idea/**/projectSettingsUpdater.xml
+
+# System files
+.DS_Store
+._*
+Thumbs.db
