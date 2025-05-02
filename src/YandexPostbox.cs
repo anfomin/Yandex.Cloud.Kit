@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aws4RequestSigner;
 using Microsoft.Extensions.Options;
+using MimeKit;
 
 namespace Yandex.Cloud;
 
@@ -23,38 +24,15 @@ public class YandexPostbox(
 	};
 	readonly IHttpClientFactory _clientFactory = clientFactory;
 	readonly YandexCloudOptions _cloudOptions = cloudOptions.Value;
-	readonly MailAddress _defaultAddress = mailOptions.Value.DefaultAddress ?? throw new ArgumentException("Mail default address is required");
+	readonly YandexMailOptions _mailOptions = mailOptions.Value;
 
 	/// <inheritdoc />
-	public async Task<Result<string>> SendMailAsync(IEnumerable<MailAddress> to, string subject, string bodyHtml, CancellationToken cancellationToken = default)
+	public async Task<string> SendMailAsync(MailMessage message, CancellationToken cancellationToken = default)
 	{
-		ArgumentException.ThrowIfNullOrEmpty(subject);
-		ArgumentException.ThrowIfNullOrEmpty(bodyHtml);
-
-		var requestData = new
-		{
-			FromEmailAddress = _defaultAddress.ToString(),
-			Destination = new
-			{
-				ToAddresses = to
-					.Select(a => a.ToString())
-					.ToArray()
-			},
-			Content = new
-			{
-				Simple = new
-				{
-					Subject = CreateJsonText(subject),
-					Body = new
-					{
-						Html = CreateJsonText(bodyHtml)
-					}
-				}
-			}
-		};
+		var data = GetMessageData(message);
 		var request = new HttpRequestMessage(HttpMethod.Post, "https://postbox.cloud.yandex.net/v2/email/outbound-emails")
 		{
-			Content = JsonContent.Create(requestData, null, JsonOptions)
+			Content = JsonContent.Create(data, null, JsonOptions)
 		};
 		using (var signer = new AWS4RequestSigner(_cloudOptions.AccountKey, _cloudOptions.SecretKey))
 			await signer.Sign(request, "ses", "ru-central1");
@@ -64,7 +42,8 @@ public class YandexPostbox(
 		if (!response.IsSuccessStatusCode)
 		{
 			var error = await response.Content.ReadFromJsonAsync<JsonNode>(JsonOptions, cancellationToken);
-			return Result<string>.Error(error?["message"]?.GetValue<string>() ?? $"Invalid status code {response.StatusCode}");
+			string errorMessage = error?["message"]?.GetValue<string>() ?? $"Invalid status code {response.StatusCode}";
+			throw new InvalidOperationException(errorMessage);
 		}
 
 		var responseContent = await response.Content.ReadFromJsonAsync<JsonNode>(JsonOptions, cancellationToken)
@@ -72,10 +51,69 @@ public class YandexPostbox(
 		return responseContent["MessageId"]!.GetValue<string>();
 	}
 
-	static object CreateJsonText(string text)
-		=> new
+	object GetMessageData(MailMessage message)
+	{
+		if (string.IsNullOrEmpty(message.Subject))
+			throw new ArgumentException("Message subject is required", nameof(message));
+		if (string.IsNullOrEmpty(message.Body))
+			throw new ArgumentException("Message body is required", nameof(message));
+
+		var from = message.From
+			?? _mailOptions.DefaultAddress
+			?? throw new ArgumentException("Mail default address is required");
+		object content;
+		if (message.Attachments.Count == 0)
 		{
-			Charset = "UTF-8",
-			Data = text
+			object body = message.IsBodyHtml
+				? new { Html = new TextValue(message.Body) }
+				: new { Text = new TextValue(message.Body) };
+			content = new
+			{
+				Simple = new
+				{
+					Subject = new TextValue(message.Subject),
+					Headers = message.Headers.AllKeys
+						.NotNull()
+						.Select(key => new
+						{
+							Name = key,
+							Value = message.Headers[key]
+						})
+						.ToArray(),
+					Body = body
+				}
+			};
+		}
+		else
+		{
+			var mimeMessage = MimeMessage.CreateFromMailMessage(message);
+			if (message.From == null)
+			{
+				mimeMessage.Headers.Replace(HeaderId.From, string.Empty);
+				mimeMessage.From.Add((MailboxAddress)from);
+			}
+			using var ms = new MemoryStream();
+			mimeMessage.WriteTo(ms);
+			content = new
+			{
+				Raw = new
+				{
+					Data = Convert.ToBase64String(ms.GetBuffer(), 0, (int)ms.Length)
+				}
+			};
+		}
+		return new
+		{
+			FromEmailAddress = from.ToString(),
+			Destination = new
+			{
+				ToAddresses = message.To.Select(a => a.ToString()).ToArray(),
+				CcAddresses = message.CC.Select(a => a.ToString()).ToArray(),
+				BccAddresses = message.Bcc.Select(a => a.ToString()).ToArray()
+			},
+			Content = content
 		};
+	}
+
+	record TextValue(string Data, string Charset = "UTF-8");
 }
