@@ -21,12 +21,18 @@ public class YandexStorage : IStorage, IDisposable
 
 	public YandexStorage(IOptions<YandexCloudOptions> cloudOptions, IOptions<YandexStorageOptions> storageOptions)
 	{
-		var credentials = new BasicAWSCredentials(cloudOptions.Value.AccountKey, cloudOptions.Value.SecretKey);
+		var options = cloudOptions.Value;
+		if (string.IsNullOrEmpty(options.AccountKey))
+			throw new ArgumentException("Yandex.Cloud option AccountKey is required", nameof(cloudOptions));
+		if (string.IsNullOrEmpty(options.SecretKey))
+			throw new ArgumentException("Yandex.Cloud option SecretKey is required", nameof(cloudOptions));
+
+		var credentials = new BasicAWSCredentials(options.AccountKey, options.SecretKey);
 		_client = new AmazonS3Client(credentials, new AmazonS3Config
 		{
 			ServiceURL = "https://s3.yandexcloud.net"
 		});
-		_bucketName = storageOptions.Value.Bucket ?? throw new ApplicationException("Yandex.Cloud storage configuration Bucket is not set");
+		_bucketName = storageOptions.Value.Bucket ?? throw new ArgumentException("Yandex.Cloud storage option Bucket is required", nameof(storageOptions));
 	}
 
 	/// <inheritdoc />

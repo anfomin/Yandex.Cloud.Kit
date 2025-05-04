@@ -12,30 +12,48 @@ namespace Yandex.Cloud;
 /// <summary>
 /// Provides email sending using Yandex.Cloud Postbox.
 /// </summary>
-public class YandexPostbox(
-	IHttpClientFactory clientFactory,
-	IOptions<YandexCloudOptions> cloudOptions,
-	IOptions<YandexMailOptions> mailOptions
-) : IMailService
+public class YandexPostbox : IMailService
 {
 	static readonly JsonSerializerOptions JsonOptions = new()
 	{
 		Encoder = JavaScriptEncoder.Create(System.Text.Unicode.UnicodeRanges.All)
 	};
-	readonly IHttpClientFactory _clientFactory = clientFactory;
-	readonly YandexCloudOptions _cloudOptions = cloudOptions.Value;
-	readonly YandexMailOptions _mailOptions = mailOptions.Value;
+	readonly IHttpClientFactory _clientFactory;
+	readonly IEnumerable<IMailFilter> _filters;
+	readonly YandexCloudOptions _cloudOptions;
+	readonly YandexMailOptions _mailOptions;
+
+	public YandexPostbox(
+		IHttpClientFactory clientFactory,
+		IOptions<YandexCloudOptions> cloudOptions,
+		IOptions<YandexMailOptions> mailOptions,
+		IEnumerable<IMailFilter>? filters = null)
+	{
+		var options = cloudOptions.Value;
+		if (string.IsNullOrEmpty(options.AccountKey))
+			throw new ArgumentException("Yandex.Cloud option AccountKey is required", nameof(cloudOptions));
+		if (string.IsNullOrEmpty(options.SecretKey))
+			throw new ArgumentException("Yandex.Cloud option SecretKey is required", nameof(cloudOptions));
+
+		_clientFactory = clientFactory;
+		_filters = filters ?? [];
+		_cloudOptions = options;
+		_mailOptions = mailOptions.Value;
+	}
 
 	/// <inheritdoc />
 	public async Task<string> SendMailAsync(MailMessage message, CancellationToken cancellationToken = default)
 	{
+		if (_filters.Any(f => !f.ShouldSend(message)))
+			throw new InvalidOperationException("Mail message was filtered");
+
 		var data = GetMessageData(message);
 		var request = new HttpRequestMessage(HttpMethod.Post, "https://postbox.cloud.yandex.net/v2/email/outbound-emails")
 		{
 			Content = JsonContent.Create(data, null, JsonOptions)
 		};
 		using (var signer = new AWS4RequestSigner(_cloudOptions.AccountKey, _cloudOptions.SecretKey))
-			await signer.Sign(request, "ses", "ru-central1");
+			await signer.Sign(request, "ses", _cloudOptions.Region);
 
 		var client = _clientFactory.CreateClient();
 		using var response = await client.SendAsync(request, cancellationToken);

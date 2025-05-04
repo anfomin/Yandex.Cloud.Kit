@@ -10,19 +10,28 @@ namespace Yandex.Cloud;
 /// <summary>
 /// Provides text to speech conversion.
 /// </summary>
-public class YandexSpeechKit(
-	ILogger<YandexSpeechKit> logger,
-	IHttpClientFactory clientFactory,
-	IOptions<YandexCloudOptions> options
-) {
+public class YandexSpeechKit
+{
 	static readonly JsonSerializerOptions JsonOptions = new()
 	{
 		Encoder = JavaScriptEncoder.Create(System.Text.Unicode.UnicodeRanges.All),
 		PropertyNamingPolicy = JsonNamingPolicy.CamelCase
 	};
-	readonly ILogger _logger = logger;
-	readonly IHttpClientFactory _clientFactory = clientFactory;
-	readonly YandexCloudOptions _options = options.Value;
+	readonly ILogger _logger;
+	readonly IHttpClientFactory _clientFactory;
+	readonly YandexCloudOptions _options;
+
+	public YandexSpeechKit(
+		ILogger<YandexSpeechKit> logger,
+		IHttpClientFactory clientFactory,
+		IOptions<YandexCloudOptions> options)
+	{
+		_logger = logger;
+		_clientFactory = clientFactory;
+		_options = options.Value;
+		if (string.IsNullOrEmpty(_options.ApiKey))
+			throw new ArgumentException("Yandex.Cloud option ApiKey is required", nameof(options));
+	}
 
 	/// <summary>
 	/// Converts the specified text to speech and writes the result to the output stream.
@@ -32,7 +41,7 @@ public class YandexSpeechKit(
 	/// <param name="volume">Speech volume.</param>
 	public async Task ConvertTextToSpeechAsync(string text, Stream output, (SpeechVolumeType Type, double Value)? volume = null, CancellationToken cancellationToken = default)
 	{
-		_logger.LogInformation("Converting text to speech: {text}", text);
+		_logger.LogDebug("Converting text to speech: {Text}", text);
 		var client = CreateClient();
 		using var response = await client.PostAsJsonAsync("utteranceSynthesis",
 			new

@@ -1,7 +1,7 @@
 ﻿namespace Yandex.Cloud;
 
 /// <summary>
-/// Provides options for <see cref="YandexStorage"/>
+/// Provides options for <see cref="YandexStorage"/>.
 /// </summary>
 public record YandexStorageOptions
 {

@@ -31,7 +31,7 @@ public static class YandexServiceExtensions
 	/// Registers Yandex.Cloud object storage as <see cref="IStorage"/>.
 	/// </summary>
 	/// <param name="configure">The action used to configure storage options.</param>
-	public static IYandexCloudBuilder AddYandexStorage(this IYandexCloudBuilder builder, Action<YandexStorageOptions> configure)
+	public static IYandexCloudBuilder AddStorage(this IYandexCloudBuilder builder, Action<YandexStorageOptions> configure)
 	{
 		builder.Services.TryAddTransient<IStorage, YandexStorage>();
 		builder.Services.Configure(configure);
@@ -42,7 +42,7 @@ public static class YandexServiceExtensions
 	/// Registers Yandex.Cloud object storage as <see cref="IStorage"/>.
 	/// </summary>
 	/// <param name="config">The configuration being bound to <see cref="YandexStorageOptions"/>.</param>
-	public static IYandexCloudBuilder AddYandexStorage(this IYandexCloudBuilder builder, IConfiguration config)
+	public static IYandexCloudBuilder AddStorage(this IYandexCloudBuilder builder, IConfiguration config)
 	{
 		builder.Services.TryAddTransient<IStorage, YandexStorage>();
 		builder.Services.Configure<YandexStorageOptions>(config);
@@ -53,7 +53,7 @@ public static class YandexServiceExtensions
 	/// Registers Yandex.Cloud Postbox as <see cref="IMailService"/>.
 	/// </summary>
 	/// <param name="configure">The action used to configure mail options.</param>
-	public static IYandexCloudBuilder AddYandexPostbox(this IYandexCloudBuilder builder, Action<YandexMailOptions> configure)
+	public static IYandexCloudBuilder AddPostbox(this IYandexCloudBuilder builder, Action<YandexMailOptions> configure)
 	{
 		builder.Services.TryAddTransient<IMailService, YandexPostbox>();
 		builder.Services.Configure(configure);
@@ -64,10 +64,32 @@ public static class YandexServiceExtensions
 	/// Registers Yandex.Cloud Postbox as <see cref="IMailService"/>.
 	/// </summary>
 	/// <param name="config">The configuration being bound to <see cref="YandexMailOptions"/>.</param>
-	public static IYandexCloudBuilder AddYandexPostbox(this IYandexCloudBuilder builder, IConfiguration config)
+	public static IYandexCloudBuilder AddPostbox(this IYandexCloudBuilder builder, IConfiguration config)
 	{
 		builder.Services.TryAddTransient<IMailService, YandexPostbox>();
 		builder.Services.Configure<YandexMailOptions>(config);
+		return builder;
+	}
+
+	/// <summary>
+	/// Registers Yandex.Cloud <see cref="YandexDataStream"/> service.
+	/// </summary>
+	/// <param name="configure">The action used to configure data streams.</param>
+	public static IYandexCloudBuilder AddDataStream(this IYandexCloudBuilder builder, Action<YandexDataStreamOptions> configure)
+	{
+		builder.Services.TryAddTransient<YandexDataStream>();
+		builder.Services.Configure(configure);
+		return builder;
+	}
+
+	/// <summary>
+	/// Registers Yandex.Cloud <see cref="YandexDataStream"/> service.
+	/// </summary>
+	/// <param name="config">The configuration being bound to <see cref="YandexDataStreamOptions"/>.</param>
+	public static IYandexCloudBuilder AddDataStream(this IYandexCloudBuilder builder, IConfiguration config)
+	{
+		builder.Services.TryAddTransient<YandexDataStream>();
+		builder.Services.Configure<YandexDataStreamOptions>(config);
 		return builder;
 	}
 
