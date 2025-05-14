@@ -174,7 +174,7 @@ public class YandexStorage : IStorage, IDisposable
 	/// Returns directory path for specified <paramref name="path"/>.
 	/// </summary>
 	/// <param name="path">Path to get directory for.</param>
-	string? GetDirectoryPath(string path)
+	static string? GetDirectoryPath(string path)
 	{
 		var parts = path.Split(PathDelimiter, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.RemoveEmptyEntries);
 		return parts.Length <= 1 ? null : parts.SkipLast(1).Join(PathDelimiter);
@@ -219,16 +219,16 @@ public class YandexStorage : IStorage, IDisposable
 
 		public File(S3Object obj)
 		{
-			Name = Path.GetFileName(obj.Key);
+			Name = Path.GetFileName(obj.Key.TrimEnd('/'));
 			FullName = obj.Key;
-			IsDirectory = false;
+			IsDirectory = obj.Key.EndsWith('/');
 			Length = obj.Size;
 			LastModified = obj.LastModified;
 		}
 
 		public File(GetObjectResponse response)
 		{
-			Name = Path.GetFileName(response.Key);
+			Name = Path.GetFileName(response.Key.TrimEnd('/'));
 			FullName = response.Key;
 			IsDirectory = response.Key.EndsWith('/');
 			Length = response.ContentLength;

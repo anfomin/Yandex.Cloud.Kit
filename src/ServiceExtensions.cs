@@ -96,7 +96,7 @@ public static class YandexServiceExtensions
 	/// <summary>
 	/// Registers Yandex.Cloud <see cref="YandexSpeechKit"/> service.
 	/// </summary>
-	public static IYandexCloudBuilder AddYandexSpeechKit(this IYandexCloudBuilder builder)
+	public static IYandexCloudBuilder AddSpeechKit(this IYandexCloudBuilder builder)
 	{
 		builder.Services.TryAddTransient<YandexSpeechKit>();
 		return builder;
