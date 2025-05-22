@@ -62,6 +62,6 @@ public partial record YandexAuthorizedKey
 			+ match.Groups["suffix"].Value
 		);
 
-	[GeneratedRegex(@"(?<prefix>[\w\+])(?<dashes>-{1,2})(?<suffix>[\w\+])")]
+	[GeneratedRegex(@"(?<prefix>\n|\w)(?<dashes>-{1,2})(?<suffix>\w|\n)")]
 	private static partial Regex DashRegex();
 }
