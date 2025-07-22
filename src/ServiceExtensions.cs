@@ -55,6 +55,7 @@ public static class YandexServiceExtensions
 	/// <param name="configure">The action used to configure mail options.</param>
 	public static IYandexCloudBuilder AddPostbox(this IYandexCloudBuilder builder, Action<YandexMailOptions> configure)
 	{
+		builder.Services.AddHttpClient();
 		builder.Services.TryAddTransient<IMailService, YandexPostbox>();
 		builder.Services.Configure(configure);
 		return builder;
@@ -66,8 +67,75 @@ public static class YandexServiceExtensions
 	/// <param name="config">The configuration being bound to <see cref="YandexMailOptions"/>.</param>
 	public static IYandexCloudBuilder AddPostbox(this IYandexCloudBuilder builder, IConfiguration config)
 	{
+		builder.Services.AddHttpClient();
 		builder.Services.TryAddTransient<IMailService, YandexPostbox>();
 		builder.Services.Configure<YandexMailOptions>(config);
+		return builder;
+	}
+
+	/// <summary>
+	/// Registers Yandex.Cloud Postbox <see cref="IMailFilter"/>.
+	/// </summary>
+	/// <typeparam name="T">Mail filter type.</typeparam>
+	public static IYandexCloudBuilder AddPostboxFilter<T>(this IYandexCloudBuilder builder)
+		where T : class, IMailFilter
+	{
+		builder.Services.TryAddEnumerable(ServiceDescriptor.Scoped<IMailFilter, T>());
+		return builder;
+	}
+
+	/// <summary>
+	/// Registers Yandex.Cloud Postbox <see cref="IMailFilter"/> with a factory.
+	/// </summary>
+	/// <param name="implementationFactory">A factory to create new instances of the filter implementation.</param>
+	/// <typeparam name="T">Mail filter type.</typeparam>
+	public static IYandexCloudBuilder AddPostboxFilter<T>(this IYandexCloudBuilder builder, Func<IServiceProvider, T> implementationFactory)
+		where T : class, IMailFilter
+	{
+		builder.Services.TryAddEnumerable(ServiceDescriptor.Scoped<IMailFilter, T>(implementationFactory));
+		return builder;
+	}
+
+	/// <summary>
+	/// Registers Yandex.Cloud Postbox <see cref="IMailFilter"/> with a specific implementation type.
+	/// </summary>
+	/// <param name="implementationType">Mail filter implementation type.</param>
+	public static IYandexCloudBuilder AddPostboxFilter(this IYandexCloudBuilder builder, Type implementationType)
+	{
+		builder.Services.TryAddEnumerable(ServiceDescriptor.Scoped(typeof(IMailFilter), implementationType));
+		return builder;
+	}
+
+	/// <summary>
+	/// Registers Yandex.Cloud Postbox <see cref="IMailModifier"/>.
+	/// </summary>
+	/// <typeparam name="T">Mail modifier type.</typeparam>
+	public static IYandexCloudBuilder AddPostboxModifier<T>(this IYandexCloudBuilder builder)
+		where T : class, IMailModifier
+	{
+		builder.Services.TryAddEnumerable(ServiceDescriptor.Scoped<IMailModifier, T>());
+		return builder;
+	}
+
+	/// <summary>
+	/// Registers Yandex.Cloud Postbox <see cref="IMailModifier"/> with a factory.
+	/// </summary>
+	/// <param name="implementationFactory">A factory to create new instances of the modifier implementation.</param>
+	/// <typeparam name="T">Mail modifier type.</typeparam>
+	public static IYandexCloudBuilder AddPostboxModifier<T>(this IYandexCloudBuilder builder, Func<IServiceProvider, T> implementationFactory)
+		where T : class, IMailModifier
+	{
+		builder.Services.TryAddEnumerable(ServiceDescriptor.Scoped<IMailModifier, T>(implementationFactory));
+		return builder;
+	}
+
+	/// <summary>
+	/// Registers Yandex.Cloud Postbox <see cref="IMailModifier"/> with a specific implementation type.
+	/// </summary>
+	/// <param name="implementationType">Mail modifier implementation type.</param>
+	public static IYandexCloudBuilder AddPostboxModifier(this IYandexCloudBuilder builder, Type implementationType)
+	{
+		builder.Services.TryAddEnumerable(ServiceDescriptor.Scoped(typeof(IMailModifier), implementationType));
 		return builder;
 	}
 

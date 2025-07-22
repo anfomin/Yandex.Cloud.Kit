@@ -19,15 +19,17 @@ public class YandexPostbox : IMailService
 		Encoder = JavaScriptEncoder.Create(System.Text.Unicode.UnicodeRanges.All)
 	};
 	readonly IHttpClientFactory _clientFactory;
-	readonly IEnumerable<IMailFilter> _filters;
 	readonly YandexCloudOptions _cloudOptions;
 	readonly YandexMailOptions _mailOptions;
+	readonly IEnumerable<IMailFilter> _filters;
+	readonly IEnumerable<IMailModifier> _modifiers;
 
 	public YandexPostbox(
 		IHttpClientFactory clientFactory,
 		IOptions<YandexCloudOptions> cloudOptions,
 		IOptions<YandexMailOptions> mailOptions,
-		IEnumerable<IMailFilter>? filters = null)
+		IEnumerable<IMailFilter>? filters = null,
+		IEnumerable<IMailModifier>? modifiers = null)
 	{
 		var options = cloudOptions.Value;
 		if (string.IsNullOrEmpty(options.AccountKey))
@@ -36,16 +38,19 @@ public class YandexPostbox : IMailService
 			throw new ArgumentException("Yandex.Cloud option SecretKey is required", nameof(cloudOptions));
 
 		_clientFactory = clientFactory;
-		_filters = filters ?? [];
 		_cloudOptions = options;
 		_mailOptions = mailOptions.Value;
+		_filters = filters ?? [];
+		_modifiers = modifiers ?? [];
 	}
 
 	/// <inheritdoc />
 	public async Task<string> SendMailAsync(MailMessage message, CancellationToken cancellationToken = default)
 	{
 		if (_filters.Any(f => !f.ShouldSend(message)))
-			throw new InvalidOperationException("Mail message was filtered");
+			throw new MailFilteredException();
+		foreach (var modifier in _modifiers)
+			modifier.Apply(message);
 
 		var data = GetMessageData(message);
 		var request = new HttpRequestMessage(HttpMethod.Post, "https://postbox.cloud.yandex.net/v2/email/outbound-emails")
@@ -80,7 +85,7 @@ public class YandexPostbox : IMailService
 			?? _mailOptions.DefaultAddress
 			?? throw new ArgumentException("Mail default address is required");
 		object content;
-		if (message.Attachments.Count == 0)
+		if (message.ReplyToList.Count == 0 && message.Attachments.Count == 0)
 		{
 			object body = message.IsBodyHtml
 				? new { Html = new TextValue(message.Body) }

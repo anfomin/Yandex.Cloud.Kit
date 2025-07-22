@@ -73,7 +73,7 @@ public record YandexPostboxEvent
 	}
 
 	/// <summary>
-	/// Provides delivery informatin.
+	/// Provides delivery information.
 	/// </summary>
 	public record DeliveryData
 	{
@@ -112,7 +112,7 @@ public record YandexPostboxEvent
 	}
 
 	/// <summary>
-	/// Provides information abount bounced recipient.
+	/// Provides information about bounced recipient.
 	/// </summary>
 	public record BounceRecipient
 	{
