@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Net.Mail;
+using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -109,12 +110,7 @@ public class YandexPostbox : IMailService
 		}
 		else
 		{
-			var mimeMessage = MimeMessage.CreateFromMailMessage(message);
-			if (message.From == null)
-			{
-				mimeMessage.Headers.Replace(HeaderId.From, string.Empty);
-				mimeMessage.From.Add((MailboxAddress)from);
-			}
+			var mimeMessage = CreateMimeMessage(message, from);
 			using var ms = new MemoryStream();
 			mimeMessage.WriteTo(ms);
 			content = new
@@ -136,6 +132,147 @@ public class YandexPostbox : IMailService
 			},
 			Content = content
 		};
+	}
+
+	/// <summary>
+	/// Creates correct <see cref="MimeMessage"/> from <see cref="MailMessage"/>.
+	/// </summary>
+	static MimeMessage CreateMimeMessage(MailMessage message, MailAddress from)
+	{
+		const int maxLineLength = 998 / 2 - 2;
+		var body = message.Body.AsSpan();
+		if (TextLineExceeds(body, maxLineLength))
+		{
+			// limit body line length
+			StringBuilder result = new(body.Length);
+			if (!message.IsBodyHtml)
+			{
+				result.AppendLine("<!DOCTYPE html>");
+				result.AppendLine("<html>");
+				result.AppendLine("<head>");
+				result.AppendLine("</head>");
+				result.AppendLine("<body>");
+			}
+
+			foreach (var bodyLine in body.EnumerateLines())
+			{
+				ReadOnlySpan<char> line = bodyLine;
+				if (!message.IsBodyHtml && bodyLine.ContainsAny(['<', '>']))
+					line = bodyLine.ToString().Replace("<", "&lt;").Replace(">", "&gt;");
+
+				while (line.Length > maxLineLength)
+				{
+					int open = line.IndexOf('<');
+					if (open == -1)
+					{
+						var sub = LimitLine(line, maxLineLength);
+						result.Append(sub);
+						result.AppendLine();
+						line = line[sub.Length..];
+					}
+					else
+					{
+						int close = line[(open + 1)..].IndexOf('>') + open + 1;
+						if (open != 0)
+						{
+							var sub = LimitLine(line, Math.Min(open, maxLineLength));
+							result.Append(sub);
+							result.AppendLine();
+							line = line[sub.Length..];
+						}
+						else if (close == -1)
+						{
+							result.Append(line);
+							line = string.Empty;
+						}
+						else
+						{
+							result.Append(line[open..(close + 1)]);
+							result.AppendLine();
+							line = line[(close + 1)..];
+						}
+					}
+				}
+				result.Append(line);
+				result.AppendLine();
+			}
+
+			if (!message.IsBodyHtml)
+			{
+				result.AppendLine("</body>");
+				result.AppendLine("<html>");
+			}
+
+			MailMessage copy = new()
+			{
+				HeadersEncoding = message.HeadersEncoding,
+				Subject = message.Subject,
+				SubjectEncoding = message.SubjectEncoding,
+				Body = result.ToString(),
+				BodyEncoding = message.BodyEncoding,
+				BodyTransferEncoding = message.BodyTransferEncoding,
+				IsBodyHtml = true,
+				Priority = message.Priority,
+			};
+			if (message.Sender != null)
+				copy.Sender = message.Sender;
+			if (message.From != null)
+				copy.From = message.From;
+			foreach (var address in message.To)
+				copy.To.Add(address);
+			foreach (var address in message.CC)
+				copy.CC.Add(address);
+			foreach (var address in message.Bcc)
+				copy.Bcc.Add(address);
+			foreach (var address in message.ReplyToList)
+				copy.ReplyToList.Add(address);
+			foreach (var field in message.Headers.AllKeys)
+				copy.Headers.Set(field, message.Headers[field]);
+			foreach (var attachment in message.Attachments)
+				copy.Attachments.Add(attachment);
+			foreach (var view in message.AlternateViews)
+				copy.AlternateViews.Add(view);
+			message = copy;
+		}
+
+		var msg = MimeMessage.CreateFromMailMessage(message);
+		if (message.From == null)
+		{
+			msg.Headers.Replace(HeaderId.From, string.Empty);
+			msg.From.Add((MailboxAddress)from);
+		}
+
+		return msg;
+	}
+
+	/// <summary>
+	/// Checks if any line in the text exceeds the specified maximum length.
+	/// </summary>
+	static bool TextLineExceeds(ReadOnlySpan<char> text, int maxLength)
+	{
+		foreach (var range in text.Split('\n'))
+		{
+			var line = text[range];
+			if (line.Length > maxLength)
+				return true;
+		}
+		return false;
+	}
+
+	/// <summary>
+	/// Limits the line length to the specified maximum length.
+	/// </summary>
+	static ReadOnlySpan<char> LimitLine(ReadOnlySpan<char> line, int maxLength)
+	{
+		if (line.Length <= maxLength)
+			return line;
+
+		var sub = line[..maxLength];
+		if (line[maxLength] == '\n')
+			return sub;
+
+		int space = sub.LastIndexOf(' ');
+		return space == -1 ? sub : sub[..space];
 	}
 
 	record TextValue(string Data, string Charset = "UTF-8");
