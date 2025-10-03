@@ -140,7 +140,7 @@ public record YandexPostboxEvent
 		/// <summary>
 		/// Message is undelivered.
 		/// </summary>
-		Permenent
+		Permanent
 	}
 
 	/// <summary>

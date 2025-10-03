@@ -14,6 +14,7 @@ obj
 /.idea/**/workspace.xml
 /.idea/**/tasks.xml
 /.idea/**/projectSettingsUpdater.xml
+/.idea/**/copilot.*.xml
 
 # System files
 .DS_Store

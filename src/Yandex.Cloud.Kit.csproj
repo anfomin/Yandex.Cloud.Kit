@@ -7,7 +7,7 @@
 		<Description>Services to work with Yandex.Cloud.</Description>
 		<Authors>Alexander Fomin</Authors>
 		<RepositoryUrl>https://github.com/anfomin/yandex.cloud.kit</RepositoryUrl>
-		<VersionPrefix>0.4.1</VersionPrefix>
+		<VersionPrefix>0.4.2</VersionPrefix>
 		<VersionSuffix Condition="'$(VERSION_SUFFIX)'!=''">$(VERSION_SUFFIX)</VersionSuffix>
 		<RootNamespace>Yandex.Cloud</RootNamespace>
 		<TargetFramework>net9.0</TargetFramework>
@@ -23,12 +23,12 @@
 		<PackageReference Include="Microsoft.Extensions.FileProviders.Abstractions" Version="9.0.*" />
 		<PackageReference Include="Microsoft.Extensions.Http" Version="9.0.*" />
 		<PackageReference Include="Microsoft.Extensions.Options" Version="9.0.*" />
-		<PackageReference Include="HelpersCore" Version="1.6.5" />
+		<PackageReference Include="HelpersCore" Version="1.6.*" />
 		<PackageReference Include="Yandex.Cloud.SDK" Version="1.4.1" />
 		<PackageReference Include="AWSSDK.S3" Version="3.7.416.19" />
 		<PackageReference Include="AWSSDK.Kinesis" Version="3.7.403.2" />
 		<PackageReference Include="Aws4RequestSigner" Version="1.0.3" />
-		<PackageReference Include="MimeKit" Version="4.13.0" />
+		<PackageReference Include="MimeKit" Version="4.14.0" />
 	</ItemGroup>
 
 	<ItemGroup>
