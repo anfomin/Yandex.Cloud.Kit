@@ -3,6 +3,8 @@ using System.Net.Http.Json;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
+using System.Text.Unicode;
 using Microsoft.Extensions.Options;
 
 namespace Yandex.Cloud;
@@ -14,8 +16,12 @@ public class YandexSpeechKit
 {
 	static readonly JsonSerializerOptions JsonOptions = new()
 	{
-		Encoder = JavaScriptEncoder.Create(System.Text.Unicode.UnicodeRanges.All),
-		PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+		Encoder = JavaScriptEncoder.Create(UnicodeRanges.All),
+		PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+		Converters =
+		{
+			new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseUpper)
+		}
 	};
 	readonly ILogger _logger;
 	readonly IHttpClientFactory _clientFactory;
@@ -34,12 +40,22 @@ public class YandexSpeechKit
 	}
 
 	/// <summary>
-	/// Converts the specified text to speech and writes the result to the output stream.
+	/// Converts the specified text to speech and writes the result to the <paramref name="output"/> stream.
 	/// </summary>
 	/// <param name="text">Text to convert.</param>
 	/// <param name="output">Audio output stream.</param>
-	/// <param name="volume">Speech volume.</param>
-	public async Task ConvertTextToSpeechAsync(string text, Stream output, (SpeechVolumeType Type, double Value)? volume = null, CancellationToken cancellationToken = default)
+	/// <param name="volume">
+	/// Regulates normalization level:
+	/// <list type="bullet">
+	/// <item>For <see cref="AudioNormalization.LUFS"/> volume changes in a range <c>[-145;0)</c>, default is <c>-19</c>.</item>
+	///	<item>For <see cref="AudioNormalization.MaxPeak"/> volume changes in a range <c>(0;1]</c>, default is <c>0.7</c>.</item>
+	/// </list>
+	/// </param>
+	/// <param name="container">Output container type.</param>
+	public async Task ConvertTextToSpeechAsync(string text, Stream output,
+		(AudioNormalization Normalization, double Value)? volume = null,
+		AudioContainer container = AudioContainer.Mp3,
+		CancellationToken cancellationToken = default)
 	{
 		_logger.LogDebug("Converting text to speech: {Text}", text);
 		var client = CreateClient();
@@ -51,14 +67,10 @@ public class YandexSpeechKit
 				{
 					ContainerAudio = new
 					{
-						ContainerAudioType = "MP3"
+						ContainerAudioType = container
 					}
 				},
-				LoudnessNormalizationType = volume?.Type switch
-				{
-					SpeechVolumeType.MaxPeak => "MAX_PEAK",
-					_ => "LUFS"
-				},
+				LoudnessNormalizationType = volume?.Normalization,
 				Hints = new object[]
 				{
 					new
@@ -90,10 +102,38 @@ public class YandexSpeechKit
 }
 
 /// <summary>
-/// Represents different speech volume types.
+/// Type of loudness normalization.
 /// </summary>
-public enum SpeechVolumeType
+public enum AudioNormalization
 {
+	/// <summary>
+	/// The type of normalization based on EBU R 128 recommendation.
+	/// </summary>
 	LUFS,
+
+	/// <summary>
+	/// The type of normalization, wherein the gain is changed to bring the highest PCM sample value or analog signal peak to a given level.
+	/// </summary>
 	MaxPeak
+}
+
+/// <summary>
+/// Audio container types.
+/// </summary>
+public enum AudioContainer
+{
+	/// <summary>
+	/// Data is encoded using MPEG-1/2 Layer III and compressed using the MP3 container format.
+	/// </summary>
+	Mp3,
+
+	/// <summary>
+	/// Audio bit depth 16-bit signed little-endian (Linear PCM).
+	/// </summary>
+	Wav,
+
+	/// <summary>
+	/// Data is encoded using the OPUS audio codec and compressed using the OGG container format.
+	/// </summary>
+	OggOpus
 }

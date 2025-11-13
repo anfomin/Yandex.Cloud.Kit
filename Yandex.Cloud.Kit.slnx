@@ -1,5 +1,5 @@
 <Solution>
-  <Folder Name="/Root/">
+  <Folder Name="/root/">
     <File Path="LICENSE" />
     <File Path="publish.sh" />
     <File Path=".gitignore" />

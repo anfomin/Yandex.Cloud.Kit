@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Unicode;
 using Aws4RequestSigner;
 using Microsoft.Extensions.Options;
 using MimeKit;
@@ -17,7 +18,7 @@ public class YandexPostbox : IMailService
 {
 	static readonly JsonSerializerOptions JsonOptions = new()
 	{
-		Encoder = JavaScriptEncoder.Create(System.Text.Unicode.UnicodeRanges.All)
+		Encoder = JavaScriptEncoder.Create(UnicodeRanges.All)
 	};
 	readonly IHttpClientFactory _clientFactory;
 	readonly YandexCloudOptions _cloudOptions;

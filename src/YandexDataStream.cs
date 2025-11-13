@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Unicode;
 using Amazon.Kinesis;
 using Amazon.Kinesis.Model;
 using Microsoft.Extensions.Options;
@@ -15,7 +16,7 @@ public class YandexDataStream
 {
 	static readonly JsonSerializerOptions JsonOptions = new()
 	{
-		Encoder = JavaScriptEncoder.Create(System.Text.Unicode.UnicodeRanges.All),
+		Encoder = JavaScriptEncoder.Create(UnicodeRanges.All),
 		PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
 		Converters =
 		{
@@ -55,7 +56,7 @@ public class YandexDataStream
 	/// <param name="streamName">Stream name to subscribe to.</param>
 	/// <typeparam name="TMessage">Type of message to deserialize JSON to.</typeparam>
 	public IAsyncEnumerable<Record<TMessage>> SubscribeAsync<TMessage>(string streamName)
-		=> AsyncEnumerable.Create(cancel => new StreamEnumerator<TMessage>(_logger, _client, _cloudOptions, _dsOptions, streamName, cancel));
+		=> Create(cancel => new StreamEnumerator<TMessage>(_logger, _client, _cloudOptions, _dsOptions, streamName, cancel));
 
 	/// <summary>
 	/// Subscribes to the messages of the <paramref name="streamName"/> stream received after <paramref name="timestamp"/> and later.
@@ -64,7 +65,7 @@ public class YandexDataStream
 	/// <param name="timestamp">Minimum message timestamp to receive. Not used for future new messages.</param>
 	/// <typeparam name="TMessage">Type of message to deserialize JSON to.</typeparam>
 	public IAsyncEnumerable<Record<TMessage>> SubscribeSinceAsync<TMessage>(string streamName, DateTime timestamp)
-		=> AsyncEnumerable.Create(cancel => new StreamEnumerator<TMessage>(
+		=> Create(cancel => new StreamEnumerator<TMessage>(
 			_logger, _client, _cloudOptions, _dsOptions, streamName, cancel,
 			c =>
 			{
@@ -89,7 +90,7 @@ public class YandexDataStream
 	/// <param name="sequenceNumber">Sequence number to receive messages after.</param>
 	/// <typeparam name="TMessage">Type of message to deserialize JSON to.</typeparam>
 	public IAsyncEnumerable<Record<TMessage>> SubscribeAfterAsync<TMessage>(string streamName, string sequenceNumber)
-		=> AsyncEnumerable.Create(cancel => new StreamEnumerator<TMessage>(
+		=> Create(cancel => new StreamEnumerator<TMessage>(
 			_logger, _client, _cloudOptions, _dsOptions, streamName, cancel,
 			c =>
 			{
@@ -97,6 +98,15 @@ public class YandexDataStream
 				c.StartingSequenceNumber = sequenceNumber;
 			}
 		));
+
+	static IAsyncEnumerable<T> Create<T>(Func<CancellationToken, IAsyncEnumerator<T>> factory)
+		=> new AsyncEnumerableFactory<T>(factory);
+
+	class AsyncEnumerableFactory<T>(Func<CancellationToken, IAsyncEnumerator<T>> factory) : IAsyncEnumerable<T>
+	{
+		public IAsyncEnumerator<T> GetAsyncEnumerator(CancellationToken cancellationToken = default)
+			=> factory(cancellationToken);
+	}
 
 	class StreamEnumerator<TMessage>(
 		ILogger logger,
@@ -125,7 +135,7 @@ public class YandexDataStream
 		public async ValueTask<bool> MoveNextAsync()
 		{
 			if (_disposed)
-				throw new ObjectDisposedException(nameof(StreamEnumerator<TMessage>));
+				throw new ObjectDisposedException(nameof(StreamEnumerator<>));
 
 			_streamTask ??= Task.Run(SubscribeToStream, _cancellationToken);
 			await _signal.WaitAsync(_cancellationToken);
