@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Encodings.Web;
@@ -10,13 +11,14 @@ using Microsoft.Extensions.Options;
 namespace Yandex.Cloud;
 
 /// <summary>
-/// Provides text to speech conversion.
+/// Provides text to speech conversion via Yandex.Cloud SpeechKit.
 /// </summary>
 public class YandexSpeechKit
 {
 	static readonly JsonSerializerOptions JsonOptions = new()
 	{
 		Encoder = JavaScriptEncoder.Create(UnicodeRanges.All),
+		DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
 		PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
 		Converters =
 		{
@@ -40,10 +42,11 @@ public class YandexSpeechKit
 	}
 
 	/// <summary>
-	/// Converts the specified text to speech and writes the result to the <paramref name="output"/> stream.
+	/// Synthesizes the specified text into speech and writes the result to the <paramref name="output"/> stream.
 	/// </summary>
-	/// <param name="text">Text to convert.</param>
+	/// <param name="text">Text to synthesis.</param>
 	/// <param name="output">Audio output stream.</param>
+	/// <param name="voice">Voice for speech synthesis. Default is <see cref="Voice.Russian.Marina"/>.</param>
 	/// <param name="volume">
 	/// Regulates normalization level:
 	/// <list type="bullet">
@@ -51,13 +54,36 @@ public class YandexSpeechKit
 	///	<item>For <see cref="AudioNormalization.MaxPeak"/> volume changes in a range <c>(0;1]</c>, default is <c>0.7</c>.</item>
 	/// </list>
 	/// </param>
-	/// <param name="container">Output container type.</param>
-	public async Task ConvertTextToSpeechAsync(string text, Stream output,
-		(AudioNormalization Normalization, double Value)? volume = null,
+	/// <param name="speed">Changes speaker's speed in a range <c>[0.1;3]</c>. Default is <c>1</c>.</param>
+	/// <param name="pitchShift">
+	/// Increases (or decreases) speaker's pitch, measured in Hz, in a range <c>[-1000;1000]</c>. Default is <c>0</c>.
+	/// </param>
+	/// <param name="container">Output container type. Default is <see cref="AudioContainer.Mp3"/>.</param>
+	/// <param name="unsafeMode">
+	/// Automatically split long text to several utterances and bill accordingly.
+	/// Some degradation in service quality is possible. Default is <c>false</c>.
+	/// </param>
+	public async Task SynthesizeAsync(string text, Stream output,
+		Voice? voice = null,
+		AudioVolume? volume = null,
+		double speed = 1,
+		int pitchShift = 0,
 		AudioContainer container = AudioContainer.Mp3,
+		bool unsafeMode = false,
 		CancellationToken cancellationToken = default)
 	{
 		_logger.LogDebug("Converting text to speech: {Text}", text);
+		voice ??= Voice.Russian.Marina;
+		List<object> hints = [new { Voice = voice.Key }];
+		if (voice.RoleType is { } role)
+			hints.Add(new { Role = role });
+		if (volume is { } v)
+			hints.Add(new { Volume = v.Value.ToString(CultureInfo.InvariantCulture) });
+		if (Math.Abs(speed - 1) >= 0.01)
+			hints.Add(new { Speed = Math.Round(speed, 2).ToString(CultureInfo.InvariantCulture) });
+		if (pitchShift != 0)
+			hints.Add(new { PitchShift = pitchShift.ToString(CultureInfo.InvariantCulture) });
+
 		var client = CreateClient();
 		using var response = await client.PostAsJsonAsync("utteranceSynthesis",
 			new
@@ -71,14 +97,8 @@ public class YandexSpeechKit
 					}
 				},
 				LoudnessNormalizationType = volume?.Normalization,
-				Hints = new object[]
-				{
-					new
-					{
-						Voice = "jane",
-						Volume = volume?.Value
-					}
-				}
+				Hints = hints,
+				UnsafeMode = unsafeMode
 			},
 			JsonOptions,
 			cancellationToken);
@@ -99,41 +119,4 @@ public class YandexSpeechKit
 		client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Api-Key", _options.ApiKey);
 		return client;
 	}
-}
-
-/// <summary>
-/// Type of loudness normalization.
-/// </summary>
-public enum AudioNormalization
-{
-	/// <summary>
-	/// The type of normalization based on EBU R 128 recommendation.
-	/// </summary>
-	LUFS,
-
-	/// <summary>
-	/// The type of normalization, wherein the gain is changed to bring the highest PCM sample value or analog signal peak to a given level.
-	/// </summary>
-	MaxPeak
-}
-
-/// <summary>
-/// Audio container types.
-/// </summary>
-public enum AudioContainer
-{
-	/// <summary>
-	/// Data is encoded using MPEG-1/2 Layer III and compressed using the MP3 container format.
-	/// </summary>
-	Mp3,
-
-	/// <summary>
-	/// Audio bit depth 16-bit signed little-endian (Linear PCM).
-	/// </summary>
-	Wav,
-
-	/// <summary>
-	/// Data is encoded using the OPUS audio codec and compressed using the OGG container format.
-	/// </summary>
-	OggOpus
 }

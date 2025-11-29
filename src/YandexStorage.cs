@@ -35,7 +35,6 @@ public class YandexStorage : IStorage, IDisposable
 		_bucketName = storageOptions.Value.Bucket ?? throw new ArgumentException("Yandex.Cloud storage option Bucket is required", nameof(storageOptions));
 	}
 
-	/// <inheritdoc />
 	public void Dispose()
 	{
 		foreach (var fileRef in _fileRefs)
@@ -47,11 +46,9 @@ public class YandexStorage : IStorage, IDisposable
 		_client.Dispose();
 	}
 
-	/// <inheritdoc />
 	public Task<ImmutableArray<IStorageFile>> ListAsync(CancellationToken cancellationToken = default)
 		=> ListAsync(null, cancellationToken);
 
-	/// <inheritdoc />
 	public async Task<ImmutableArray<IStorageFile>> ListAsync(string? prefix, CancellationToken cancellationToken = default)
 	{
 		var response = await _client.ListObjectsV2Async(new() { BucketName = _bucketName, Prefix = prefix }, cancellationToken);
@@ -61,7 +58,6 @@ public class YandexStorage : IStorage, IDisposable
 			.ToImmutableArray();
 	}
 
-	/// <inheritdoc />
 	public async Task<IStorageFile> GetAsync(string path, CancellationToken cancellationToken = default)
 	{
 		try
@@ -77,7 +73,6 @@ public class YandexStorage : IStorage, IDisposable
 		}
 	}
 
-	/// <inheritdoc />
 	public async Task<bool> ExistsAsync(string path, CancellationToken cancellationToken = default)
 	{
 		try
@@ -91,7 +86,6 @@ public class YandexStorage : IStorage, IDisposable
 		}
 	}
 
-	/// <inheritdoc />
 	public async Task<string?> GetPublicUrlAsync(string path, string? fileName = null, bool download = false, CancellationToken cancellationToken = default)
 	{
 		try
@@ -119,14 +113,13 @@ public class YandexStorage : IStorage, IDisposable
 		return await _client.GetPreSignedURLAsync(request);
 	}
 
-	/// <inheritdoc />
 	public async Task CreateAsync(string path, Stream stream, CancellationToken cancellationToken = default)
 	{
 		ArgumentException.ThrowIfNullOrEmpty(path);
 		if (path.EndsWith('/'))
 			throw new ArgumentException("Create subpath can not end with '/'", nameof(path));
 
-		if (GetDirectoryPath(path) is string dir)
+		if (GetDirectoryPath(path) is { } dir)
 			await CreateDirectoryAsync(dir, cancellationToken);
 		await _client.PutObjectAsync(new()
 		{
@@ -137,7 +130,6 @@ public class YandexStorage : IStorage, IDisposable
 		}, cancellationToken);
 	}
 
-	/// <inheritdoc />
 	public async Task<bool> MoveAsync(string path, string destinationPath, CancellationToken cancellationToken = default)
 	{
 		if (!await ExistsAsync(path, cancellationToken))
@@ -156,7 +148,6 @@ public class YandexStorage : IStorage, IDisposable
 		return true;
 	}
 
-	/// <inheritdoc />
 	public async Task<bool> DeleteAsync(string path, CancellationToken cancellationToken = default)
 	{
 		try

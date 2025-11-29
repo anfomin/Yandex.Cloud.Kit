@@ -90,8 +90,8 @@ public class YandexDataStream
 	/// <param name="sequenceNumber">Sequence number to receive messages after.</param>
 	/// <typeparam name="TMessage">Type of message to deserialize JSON to.</typeparam>
 	public IAsyncEnumerable<Record<TMessage>> SubscribeAfterAsync<TMessage>(string streamName, string sequenceNumber)
-		=> Create(cancel => new StreamEnumerator<TMessage>(
-			_logger, _client, _cloudOptions, _dsOptions, streamName, cancel,
+		=> Create(ct => new StreamEnumerator<TMessage>(
+			_logger, _client, _cloudOptions, _dsOptions, streamName, ct,
 			c =>
 			{
 				c.ShardIteratorType = ShardIteratorType.AFTER_SEQUENCE_NUMBER;

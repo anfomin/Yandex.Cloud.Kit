@@ -46,7 +46,6 @@ public class YandexPostbox : IMailService
 		_modifiers = modifiers ?? [];
 	}
 
-	/// <inheritdoc />
 	public async Task<string> SendMailAsync(MailMessage message, CancellationToken cancellationToken = default)
 	{
 		if (_filters.Any(f => !f.ShouldSend(message)))

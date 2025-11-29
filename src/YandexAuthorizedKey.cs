@@ -7,6 +7,7 @@ namespace Yandex.Cloud;
 
 /// <summary>
 /// Represents an authorized key for Yandex.Cloud.
+/// Supports deserializing from JSON.
 /// </summary>
 public record YandexAuthorizedKey
 {
