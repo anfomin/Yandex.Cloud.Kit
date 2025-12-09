@@ -21,4 +21,19 @@ public record YandexMailOptions
 	/// Gets or set default From <see cref="MailAddress"/>.
 	/// </summary>
 	public MailAddress? DefaultAddress { get; set; }
+
+	/// <summary>
+	/// Gets or sets email send rate limit per second.
+	/// Default is <c>1</c> and equals to Yandex.Postbox default rate limit.
+	/// </summary>
+	public int RateLimit
+	{
+		get;
+		set
+		{
+			if (value <= 0)
+				throw new ArgumentException("RateLimit must be greater than zero.", nameof(RateLimit));
+			field = value;
+		}
+	} = 1;
 }

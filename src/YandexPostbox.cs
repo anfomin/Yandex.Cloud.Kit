@@ -1,10 +1,11 @@
+using System.Net;
 using System.Net.Http.Json;
 using System.Net.Mail;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using System.Text.Unicode;
+using System.Threading.RateLimiting;
 using Aws4RequestSigner;
 using Microsoft.Extensions.Options;
 using MimeKit;
@@ -14,19 +15,25 @@ namespace Yandex.Cloud;
 /// <summary>
 /// Provides email sending using Yandex.Cloud Postbox.
 /// </summary>
-public class YandexPostbox : IMailService
+public class YandexPostbox : IMailService, IDisposable, IAsyncDisposable
 {
+	readonly TimeSpan _rateWindow = TimeSpan.FromSeconds(1);
 	static readonly JsonSerializerOptions JsonOptions = new()
 	{
-		Encoder = JavaScriptEncoder.Create(UnicodeRanges.All)
+		Encoder = JavaScriptEncoder.Create(UnicodeRanges.All),
+		PropertyNameCaseInsensitive = true
 	};
+
+	readonly ILogger _logger;
 	readonly IHttpClientFactory _clientFactory;
 	readonly YandexCloudOptions _cloudOptions;
 	readonly YandexMailOptions _mailOptions;
 	readonly IEnumerable<IMailFilter> _filters;
 	readonly IEnumerable<IMailModifier> _modifiers;
+	readonly FixedWindowRateLimiter _rateLimiter;
 
 	public YandexPostbox(
+		ILogger<YandexPostbox> logger,
 		IHttpClientFactory clientFactory,
 		IOptions<YandexCloudOptions> cloudOptions,
 		IOptions<YandexMailOptions> mailOptions,
@@ -39,20 +46,35 @@ public class YandexPostbox : IMailService
 		if (string.IsNullOrEmpty(options.SecretKey))
 			throw new ArgumentException("Yandex.Cloud option SecretKey is required", nameof(cloudOptions));
 
+		_logger = logger;
 		_clientFactory = clientFactory;
 		_cloudOptions = options;
 		_mailOptions = mailOptions.Value;
 		_filters = filters ?? [];
 		_modifiers = modifiers ?? [];
+		_rateLimiter = new(new()
+		{
+			PermitLimit = _mailOptions.RateLimit,
+			Window = _rateWindow,
+			QueueLimit = int.MaxValue,
+		});
 	}
+
+	public void Dispose()
+		=> _rateLimiter.Dispose();
+
+	public ValueTask DisposeAsync()
+		=> _rateLimiter.DisposeAsync();
 
 	public async Task<string> SendMailAsync(MailMessage message, CancellationToken cancellationToken = default)
 	{
+		// apply filters and modifiers
 		if (_filters.Any(f => !f.ShouldSend(message)))
 			throw new MailFilteredException();
 		foreach (var modifier in _modifiers)
 			modifier.Apply(message);
 
+		// create request
 		var data = GetMessageData(message);
 		var request = new HttpRequestMessage(HttpMethod.Post, "https://postbox.cloud.yandex.net/v2/email/outbound-emails")
 		{
@@ -61,18 +83,74 @@ public class YandexPostbox : IMailService
 		using (var signer = new AWS4RequestSigner(_cloudOptions.AccountKey, _cloudOptions.SecretKey))
 			await signer.Sign(request, "ses", _cloudOptions.Region);
 
+		// make request
+		using var lease = await _rateLimiter.AcquireAsync(1, cancellationToken);
+		using var response = await SendRequestAsync(request, cancellationToken);
+		var responseContent = await response.Content.ReadFromJsonAsync<Success>(JsonOptions, cancellationToken)
+			?? throw new JsonException("JSON content required");
+		return responseContent.MessageId;
+	}
+
+	async Task<HttpResponseMessage> SendRequestAsync(HttpRequestMessage request, CancellationToken cancellationToken = default)
+	{
+		const int retries = 10;
+		int attempt = 0;
 		var client = _clientFactory.CreateClient();
-		using var response = await client.SendAsync(request, cancellationToken);
-		if (!response.IsSuccessStatusCode)
+		do
 		{
-			var error = await response.Content.ReadFromJsonAsync<JsonNode>(JsonOptions, cancellationToken);
-			string errorMessage = error?["message"]?.GetValue<string>() ?? $"Invalid status code {response.StatusCode}";
-			throw new InvalidOperationException(errorMessage);
+			attempt++;
+			var response = await client.SendAsync(request, cancellationToken);
+			if (await ParseResponseExceptionAsync(response) is { } exYandex)
+			{
+				if (exYandex.Error == YandexPostboxError.TooManyRequests && attempt < retries)
+				{
+					_logger.LogDebug("Yandex.Cloud Postbox rate limit exceeded, retrying in {Delay} second", _rateWindow);
+					await Task.Delay(_rateWindow, cancellationToken);
+					continue;
+				}
+				throw exYandex;
+			}
+			response.EnsureSuccessStatusCode();
+			return response;
+		}
+		while (true);
+	}
+
+	async Task<YandexPostboxException?> ParseResponseExceptionAsync(HttpResponseMessage response)
+	{
+		if (response.StatusCode is not (HttpStatusCode.BadRequest or HttpStatusCode.NotFound or HttpStatusCode.TooManyRequests))
+			return null;
+
+		Error? error;
+		try
+		{
+			error = await response.Content.ReadFromJsonAsync<Error>(JsonOptions);
+		}
+		catch
+		{
+			return null;
 		}
 
-		var responseContent = await response.Content.ReadFromJsonAsync<JsonNode>(JsonOptions, cancellationToken)
-			?? throw new JsonException("JSON content required");
-		return responseContent["MessageId"]!.GetValue<string>();
+		YandexPostboxError? errorCode = error switch
+		{
+			{ Code: "BadRequestException" } => YandexPostboxError.BadRequest,
+			{ Code: "BadRequestException: sender is not allowed" } => YandexPostboxError.SenderNotAllowed,
+			{ Code: "AccountSuspendedException" } => YandexPostboxError.AccountSuspended,
+			{ Code: "SendingPausedException" } => YandexPostboxError.SendingPaused,
+			{ Code: "MessageRejected" } => YandexPostboxError.MessageRejected,
+			{ Code: "MailFromDomainNotVerifiedException" } => YandexPostboxError.MailFromDomainNotVerified,
+			{ Code: "NotFoundException" } => YandexPostboxError.NotFound,
+			{ Code: "TooManyRequestsException" } => YandexPostboxError.TooManyRequests,
+			{ Code: "LimitExceededException" } => YandexPostboxError.LimitExceeded,
+			_ => null
+		};
+		if (error is null || errorCode is null)
+			return null;
+
+		string message = $"Postbox {error.Code}";
+		if (error.Message is { } msg)
+			message += $": {msg}";
+		return new(message, errorCode.Value);
 	}
 
 	object GetMessageData(MailMessage message)
@@ -276,4 +354,8 @@ public class YandexPostbox : IMailService
 	}
 
 	record TextValue(string Data, string Charset = "UTF-8");
+
+	record Success(string MessageId);
+
+	record Error(string Code, string? Message = null);
 }
