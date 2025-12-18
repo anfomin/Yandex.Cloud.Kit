@@ -85,72 +85,56 @@ public class YandexPostbox : IMailService, IDisposable, IAsyncDisposable
 
 		// make request
 		using var lease = await _rateLimiter.AcquireAsync(1, cancellationToken);
-		using var response = await SendRequestAsync(request, cancellationToken);
-		var responseContent = await response.Content.ReadFromJsonAsync<Success>(JsonOptions, cancellationToken)
-			?? throw new JsonException("JSON content required");
-		return responseContent.MessageId;
-	}
-
-	async Task<HttpResponseMessage> SendRequestAsync(HttpRequestMessage request, CancellationToken cancellationToken = default)
-	{
-		const int retries = 10;
-		int attempt = 0;
 		var client = _clientFactory.CreateClient();
-		do
-		{
-			attempt++;
-			var response = await client.SendAsync(request, cancellationToken);
-			if (await ParseResponseExceptionAsync(response) is { } exYandex)
+		var result = await Retry.InvokeAsync(async ct =>
 			{
-				if (exYandex.Error == YandexPostboxError.TooManyRequests && attempt < retries)
+				var response = await client.PostAsJsonAsync("https://postbox.cloud.yandex.net/v2/email/outbound-emails", data, JsonOptions, ct);
+				await EnsureSuccessAsync(response);
+				return await response.Content.ReadFromJsonAsync<SuccessResult>(JsonOptions, ct);
+			},
+			retryCount: 5,
+			retryDelay: _rateWindow,
+			retryWhen: ex =>
+			{
+				if (ex is YandexPostboxException { Error: YandexPostboxError.TooManyRequests })
 				{
 					_logger.LogDebug("Yandex.Cloud Postbox rate limit exceeded, retrying in {Delay} second", _rateWindow);
-					await Task.Delay(_rateWindow, cancellationToken);
-					continue;
+					return true;
 				}
-				throw exYandex;
-			}
-			response.EnsureSuccessStatusCode();
-			return response;
-		}
-		while (true);
+				return false;
+			},
+			cancellationToken: cancellationToken)
+			?? throw new JsonException("JSON content required");;
+		return result.MessageId;
 	}
 
-	async Task<YandexPostboxException?> ParseResponseExceptionAsync(HttpResponseMessage response)
+	static async Task EnsureSuccessAsync(HttpResponseMessage response)
 	{
-		if (response.StatusCode is not (HttpStatusCode.BadRequest or HttpStatusCode.NotFound or HttpStatusCode.TooManyRequests))
-			return null;
-
-		Error? error;
-		try
+		if (response.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.NotFound or HttpStatusCode.TooManyRequests)
 		{
-			error = await response.Content.ReadFromJsonAsync<Error>(JsonOptions);
+			var errorResult = await response.Content.ReadFromJsonAsync<ErrorResult>(JsonOptions);
+			YandexPostboxError? error = errorResult switch
+			{
+				{ Code: "BadRequestException" } => YandexPostboxError.BadRequest,
+				{ Code: "BadRequestException: sender is not allowed" } => YandexPostboxError.SenderNotAllowed,
+				{ Code: "AccountSuspendedException" } => YandexPostboxError.AccountSuspended,
+				{ Code: "SendingPausedException" } => YandexPostboxError.SendingPaused,
+				{ Code: "MessageRejected" } => YandexPostboxError.MessageRejected,
+				{ Code: "MailFromDomainNotVerifiedException" } => YandexPostboxError.MailFromDomainNotVerified,
+				{ Code: "NotFoundException" } => YandexPostboxError.NotFound,
+				{ Code: "TooManyRequestsException" } => YandexPostboxError.TooManyRequests,
+				{ Code: "LimitExceededException" } => YandexPostboxError.LimitExceeded,
+				_ => null
+			};
+			if (errorResult is not null && error is not null)
+			{
+				string message = $"Postbox {errorResult.Code}";
+				if (errorResult.Message is { } msg)
+					message += $": {msg}";
+				throw new YandexPostboxException(message, error.Value);
+			}
 		}
-		catch
-		{
-			return null;
-		}
-
-		YandexPostboxError? errorCode = error switch
-		{
-			{ Code: "BadRequestException" } => YandexPostboxError.BadRequest,
-			{ Code: "BadRequestException: sender is not allowed" } => YandexPostboxError.SenderNotAllowed,
-			{ Code: "AccountSuspendedException" } => YandexPostboxError.AccountSuspended,
-			{ Code: "SendingPausedException" } => YandexPostboxError.SendingPaused,
-			{ Code: "MessageRejected" } => YandexPostboxError.MessageRejected,
-			{ Code: "MailFromDomainNotVerifiedException" } => YandexPostboxError.MailFromDomainNotVerified,
-			{ Code: "NotFoundException" } => YandexPostboxError.NotFound,
-			{ Code: "TooManyRequestsException" } => YandexPostboxError.TooManyRequests,
-			{ Code: "LimitExceededException" } => YandexPostboxError.LimitExceeded,
-			_ => null
-		};
-		if (error is null || errorCode is null)
-			return null;
-
-		string message = $"Postbox {error.Code}";
-		if (error.Message is { } msg)
-			message += $": {msg}";
-		return new(message, errorCode.Value);
+		response.EnsureSuccessStatusCode();
 	}
 
 	object GetMessageData(MailMessage message)
@@ -355,7 +339,7 @@ public class YandexPostbox : IMailService, IDisposable, IAsyncDisposable
 
 	record TextValue(string Data, string Charset = "UTF-8");
 
-	record Success(string MessageId);
+	record SuccessResult(string MessageId);
 
-	record Error(string Code, string? Message = null);
+	record ErrorResult(string Code, string? Message = null);
 }
