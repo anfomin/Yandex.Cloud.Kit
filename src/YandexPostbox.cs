@@ -74,21 +74,19 @@ public class YandexPostbox : IMailService, IDisposable, IAsyncDisposable
 		foreach (var modifier in _modifiers)
 			modifier.Apply(message);
 
-		// create request
-		var data = GetMessageData(message);
-		var request = new HttpRequestMessage(HttpMethod.Post, "https://postbox.cloud.yandex.net/v2/email/outbound-emails")
-		{
-			Content = JsonContent.Create(data, null, JsonOptions)
-		};
-		using (var signer = new AWS4RequestSigner(_cloudOptions.AccountKey, _cloudOptions.SecretKey))
-			await signer.Sign(request, "ses", _cloudOptions.Region);
-
 		// make request
+		var data = GetMessageData(message);
 		using var lease = await _rateLimiter.AcquireAsync(1, cancellationToken);
 		var client = _clientFactory.CreateClient();
 		var result = await Retry.InvokeAsync(async ct =>
 			{
-				var response = await client.PostAsJsonAsync("https://postbox.cloud.yandex.net/v2/email/outbound-emails", data, JsonOptions, ct);
+				var request = new HttpRequestMessage(HttpMethod.Post, "https://postbox.cloud.yandex.net/v2/email/outbound-emails")
+				{
+					Content = JsonContent.Create(data, null, JsonOptions)
+				};
+				using (var signer = new AWS4RequestSigner(_cloudOptions.AccountKey, _cloudOptions.SecretKey))
+					await signer.Sign(request, "ses", _cloudOptions.Region);
+				var response = await client.SendAsync(request, ct);
 				await EnsureSuccessAsync(response);
 				return await response.Content.ReadFromJsonAsync<SuccessResult>(JsonOptions, ct);
 			},
