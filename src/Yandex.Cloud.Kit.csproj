@@ -7,7 +7,7 @@
 		<Description>Services to work with Yandex.Cloud.</Description>
 		<Authors>Alexander Fomin</Authors>
 		<RepositoryUrl>https://github.com/anfomin/yandex.cloud.kit</RepositoryUrl>
-		<VersionPrefix>0.7.2</VersionPrefix>
+		<VersionPrefix>0.7.3</VersionPrefix>
 		<VersionSuffix Condition="'$(VERSION_SUFFIX)'!=''">$(VERSION_SUFFIX)</VersionSuffix>
 		<RootNamespace>Yandex.Cloud</RootNamespace>
 		<TargetFrameworks>net9.0;net10.0</TargetFrameworks>
@@ -20,12 +20,12 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="HelpersCore" Version="1.11.2" />
+		<PackageReference Include="HelpersCore" Version="1.13.0" />
 		<PackageReference Include="Yandex.Cloud.SDK" Version="1.4.1" />
-		<PackageReference Include="AWSSDK.S3" Version="3.7.508.2" />
-		<PackageReference Include="AWSSDK.Kinesis" Version="3.7.505.15" />
+		<PackageReference Include="AWSSDK.S3" Version="3.7.510.14" />
+		<PackageReference Include="AWSSDK.Kinesis" Version="3.7.506.11" />
 		<PackageReference Include="Aws4RequestSigner" Version="1.0.3" />
-		<PackageReference Include="MimeKit" Version="4.14.0" />
+		<PackageReference Include="MimeKit" Version="4.15.1" />
 	</ItemGroup>
 	<ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
 		<PackageReference Include="System.Threading.RateLimiting" Version="9.0.*" />
