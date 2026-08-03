@@ -102,7 +102,7 @@ public class YandexPostbox : IMailService, IDisposable, IAsyncDisposable
 				return false;
 			},
 			cancellationToken: cancellationToken)
-			?? throw new JsonException("JSON content required");;
+			?? throw new JsonException("JSON content required");
 		return result.MessageId;
 	}
 
@@ -228,7 +228,9 @@ public class YandexPostbox : IMailService, IDisposable, IAsyncDisposable
 						var sub = LimitLine(line, maxLineLength);
 						result.Append(sub);
 						result.AppendLine();
-						line = line[sub.Length..];
+						line = line.Length > sub.Length && line[sub.Length] == ' '
+							? line[(sub.Length + 1)..]
+							: line[sub.Length..];
 					}
 					else
 					{
@@ -238,7 +240,9 @@ public class YandexPostbox : IMailService, IDisposable, IAsyncDisposable
 							var sub = LimitLine(line, Math.Min(open, maxLineLength));
 							result.Append(sub);
 							result.AppendLine();
-							line = line[sub.Length..];
+							line = line.Length > sub.Length && line[sub.Length] == ' '
+								? line[(sub.Length + 1)..]
+								: line[sub.Length..];
 						}
 						else if (close == -1)
 						{

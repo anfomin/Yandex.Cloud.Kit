@@ -20,9 +20,9 @@ public static class YandexCloudExtensions
 		services.TryAddSingleton<Sdk>(s =>
 		{
 			var options = s.GetRequiredService<IOptions<YandexCloudOptions>>().Value;
-			if (options.AuthorizedKey == null)
-				throw new ApplicationException("Yandex.Cloud configuration AuthorizedKey is not set");
-			return new Sdk(options.AuthorizedKey.CreateCredentialsProvider());
+			return options.AuthorizedKey == null
+				? throw new ApplicationException("Yandex.Cloud configuration AuthorizedKey is not set")
+				: new Sdk(options.AuthorizedKey.CreateCredentialsProvider());
 		});
 		return new YandexCloudBuilder(services);
 	}
