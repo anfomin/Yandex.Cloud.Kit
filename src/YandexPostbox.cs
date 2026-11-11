@@ -1,13 +1,10 @@
 using System.Net;
-using System.Net.Http.Json;
 using System.Net.Mail;
 using System.Text;
 using System.Text.Encodings.Web;
-using System.Text.Json;
 using System.Text.Unicode;
 using System.Threading.RateLimiting;
 using Aws4RequestSigner;
-using Microsoft.Extensions.Options;
 using MimeKit;
 
 namespace Yandex.Cloud;
@@ -25,7 +22,7 @@ public class YandexPostbox : IMailService, IDisposable, IAsyncDisposable
 	};
 
 	readonly ILogger _logger;
-	readonly IHttpClientFactory _clientFactory;
+	readonly HttpClient _client;
 	readonly YandexCloudOptions _cloudOptions;
 	readonly YandexMailOptions _mailOptions;
 	readonly IEnumerable<IMailFilter> _filters;
@@ -34,7 +31,7 @@ public class YandexPostbox : IMailService, IDisposable, IAsyncDisposable
 
 	public YandexPostbox(
 		ILogger<YandexPostbox> logger,
-		IHttpClientFactory clientFactory,
+		HttpClient client,
 		IOptions<YandexCloudOptions> cloudOptions,
 		IOptions<YandexMailOptions> mailOptions,
 		IEnumerable<IMailFilter>? filters = null,
@@ -47,7 +44,7 @@ public class YandexPostbox : IMailService, IDisposable, IAsyncDisposable
 			throw new ArgumentException("Yandex.Cloud option SecretKey is required", nameof(cloudOptions));
 
 		_logger = logger;
-		_clientFactory = clientFactory;
+		_client = client;
 		_cloudOptions = options;
 		_mailOptions = mailOptions.Value;
 		_filters = filters ?? [];
@@ -77,16 +74,15 @@ public class YandexPostbox : IMailService, IDisposable, IAsyncDisposable
 		// make request
 		var data = GetMessageData(message);
 		using var lease = await _rateLimiter.AcquireAsync(1, cancellationToken);
-		var client = _clientFactory.CreateClient();
 		var result = await Retry.InvokeAsync(async ct =>
 			{
-				var request = new HttpRequestMessage(HttpMethod.Post, "https://postbox.cloud.yandex.net/v2/email/outbound-emails")
+				using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(_client.BaseAddress!, "email/outbound-emails"))
 				{
 					Content = JsonContent.Create(data, null, JsonOptions)
 				};
 				using (var signer = new AWS4RequestSigner(_cloudOptions.AccountKey, _cloudOptions.SecretKey))
 					await signer.Sign(request, "ses", _cloudOptions.Region);
-				var response = await client.SendAsync(request, ct);
+				using var response = await _client.SendAsync(request, ct);
 				await EnsureSuccessAsync(response);
 				return await response.Content.ReadFromJsonAsync<SuccessResult>(JsonOptions, ct);
 			},

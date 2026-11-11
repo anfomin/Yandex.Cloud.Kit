@@ -1,11 +1,9 @@
 using System.Collections.Concurrent;
 using System.Text.Encodings.Web;
-using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Unicode;
 using Amazon.Kinesis;
 using Amazon.Kinesis.Model;
-using Microsoft.Extensions.Options;
 
 namespace Yandex.Cloud;
 

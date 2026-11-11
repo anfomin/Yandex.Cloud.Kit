@@ -1,19 +1,15 @@
 using System.Globalization;
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using System.Text.Encodings.Web;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using System.Text.Unicode;
-using Microsoft.Extensions.Options;
 
 namespace Yandex.Cloud;
 
 /// <summary>
 /// Provides text to speech conversion via Yandex.Cloud SpeechKit.
 /// </summary>
-public class YandexSpeechKit
+public class YandexSpeechKit(ILogger<YandexSpeechKit> logger, HttpClient client)
 {
 	static readonly JsonSerializerOptions JsonOptions = new()
 	{
@@ -25,21 +21,8 @@ public class YandexSpeechKit
 			new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseUpper)
 		}
 	};
-	readonly ILogger _logger;
-	readonly IHttpClientFactory _clientFactory;
-	readonly YandexCloudOptions _options;
-
-	public YandexSpeechKit(
-		ILogger<YandexSpeechKit> logger,
-		IHttpClientFactory clientFactory,
-		IOptions<YandexCloudOptions> options)
-	{
-		_logger = logger;
-		_clientFactory = clientFactory;
-		_options = options.Value;
-		if (string.IsNullOrEmpty(_options.ApiKey))
-			throw new ArgumentException("Yandex.Cloud option ApiKey is required", nameof(options));
-	}
+	readonly ILogger _logger = logger;
+	readonly HttpClient _client = client;
 
 	/// <summary>
 	/// Synthesizes the specified text into speech and writes the result to the <paramref name="output"/> stream.
@@ -84,8 +67,7 @@ public class YandexSpeechKit
 		if (pitchShift != 0)
 			hints.Add(new { PitchShift = pitchShift.ToString(CultureInfo.InvariantCulture) });
 
-		var client = CreateClient();
-		using var response = await client.PostAsJsonAsync("utteranceSynthesis",
+		using var response = await _client.PostAsJsonAsync("utteranceSynthesis",
 			new
 			{
 				Text = text,
@@ -109,14 +91,5 @@ public class YandexSpeechKit
 			?? throw new InvalidOperationException("Failed to get audio data from response");
 		byte[] bytes = Convert.FromBase64String(base64);
 		await output.WriteAsync(bytes.AsMemory(), cancellationToken);
-	}
-
-	HttpClient CreateClient()
-	{
-		var client = _clientFactory.CreateClient();
-		client.BaseAddress = new Uri("https://tts.api.cloud.yandex.net/tts/v3/");
-		client.Timeout = TimeSpan.FromMilliseconds(30_000);
-		client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Api-Key", _options.ApiKey);
-		return client;
 	}
 }

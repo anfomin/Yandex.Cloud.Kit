@@ -7,10 +7,10 @@
 		<Description>Services to work with Yandex.Cloud.</Description>
 		<Authors>Alexander Fomin</Authors>
 		<RepositoryUrl>https://github.com/anfomin/yandex.cloud.kit</RepositoryUrl>
-		<VersionPrefix>0.7.5</VersionPrefix>
+		<VersionPrefix>0.9.0</VersionPrefix>
 		<VersionSuffix Condition="'$(VERSION_SUFFIX)'!=''">$(VERSION_SUFFIX)</VersionSuffix>
 		<RootNamespace>Yandex.Cloud</RootNamespace>
-		<TargetFrameworks>net9.0;net10.0</TargetFrameworks>
+		<TargetFrameworks>net10.0;net11.0</TargetFrameworks>
 		<LangVersion>preview</LangVersion>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
@@ -19,19 +19,17 @@
 		<NoWarn>$(NoWarn);CS1573;CS1591</NoWarn>
 	</PropertyGroup>
 
+	<PropertyGroup Condition="'$(TargetFramework)' == 'net11.0'">
+		<Features>$(Features);runtime-async=on</Features>
+	</PropertyGroup>
+
 	<ItemGroup>
-		<PackageReference Include="HelpersCore" Version="1.18.0" />
+		<PackageReference Include="HelpersCore" Version="1.23.0" />
 		<PackageReference Include="Yandex.Cloud.SDK" Version="1.4.1" />
-		<PackageReference Include="AWSSDK.S3" Version="3.7.511.8" />
-		<PackageReference Include="AWSSDK.Kinesis" Version="3.7.506.21" />
+		<PackageReference Include="AWSSDK.S3" Version="3.7.*" />
+		<PackageReference Include="AWSSDK.Kinesis" Version="3.7.*" />
 		<PackageReference Include="Aws4RequestSigner" Version="1.0.3" />
-		<PackageReference Include="MimeKit" Version="4.17.0" />
-	</ItemGroup>
-	<ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
-		<PackageReference Include="System.Threading.RateLimiting" Version="9.0.*" />
-		<PackageReference Include="Microsoft.Extensions.FileProviders.Abstractions" Version="9.0.*" />
-		<PackageReference Include="Microsoft.Extensions.Http" Version="9.0.*" />
-		<PackageReference Include="Microsoft.Extensions.Options" Version="9.0.*" />
+		<PackageReference Include="MimeKit" Version="5.0.0" />
 	</ItemGroup>
 	<ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
 		<PackageReference Include="System.Threading.RateLimiting" Version="10.0.*" />
@@ -39,10 +37,19 @@
 		<PackageReference Include="Microsoft.Extensions.Http" Version="10.0.*" />
 		<PackageReference Include="Microsoft.Extensions.Options" Version="10.0.*" />
 	</ItemGroup>
+	<ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
+		<PackageReference Include="System.Threading.RateLimiting" Version="11.0.*" />
+		<PackageReference Include="Microsoft.Extensions.FileProviders.Abstractions" Version="11.0.*" />
+		<PackageReference Include="Microsoft.Extensions.Http" Version="11.0.*" />
+		<PackageReference Include="Microsoft.Extensions.Options" Version="11.0.*" />
+	</ItemGroup>
 
 	<ItemGroup>
 		<Using Include="System.Collections.Immutable" />
+		<Using Include="System.Net.Http.Json" />
+		<Using Include="System.Text.Json" />
 		<Using Include="Microsoft.Extensions.Logging" />
+		<Using Include="Microsoft.Extensions.Options" />
 		<Using Include="HelpersCore" />
 	</ItemGroup>
 </Project>
