@@ -64,7 +64,7 @@ public static class YandexCloudExtensions
 		/// </summary>
 		public IYandexCloudBuilder AddPostbox()
 		{
-			builder.Services.AddHttpClient<YandexPostbox>(client =>
+			builder.Services.AddHttpClient<IMailService, YandexPostbox>(client =>
 			{
 				client.BaseAddress = new Uri("https://postbox.cloud.yandex.net/v2/");
 			});
