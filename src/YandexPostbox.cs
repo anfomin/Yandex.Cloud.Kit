@@ -31,7 +31,7 @@ public class YandexPostbox : IMailService, IDisposable, IAsyncDisposable
 
 	public YandexPostbox(
 		ILogger<YandexPostbox> logger,
-		HttpClient client,
+		IHttpClientFactory clientFactory,
 		IOptions<YandexCloudOptions> cloudOptions,
 		IOptions<YandexMailOptions> mailOptions,
 		IEnumerable<IMailFilter>? filters = null,
@@ -44,7 +44,7 @@ public class YandexPostbox : IMailService, IDisposable, IAsyncDisposable
 			throw new ArgumentException("Yandex.Cloud option SecretKey is required", nameof(cloudOptions));
 
 		_logger = logger;
-		_client = client;
+		_client = clientFactory.CreateClient(nameof(YandexPostbox));
 		_cloudOptions = options;
 		_mailOptions = mailOptions.Value;
 		_filters = filters ?? [];

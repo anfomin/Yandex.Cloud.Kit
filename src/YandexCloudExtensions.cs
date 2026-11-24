@@ -64,7 +64,7 @@ public static class YandexCloudExtensions
 		/// </summary>
 		public IYandexCloudBuilder AddPostbox()
 		{
-			builder.Services.AddHttpClient<IMailService, YandexPostbox>(client =>
+			builder.Services.AddHttpClient(nameof(YandexPostbox), client =>
 			{
 				client.BaseAddress = new Uri("https://postbox.cloud.yandex.net/v2/");
 			});
@@ -206,7 +206,6 @@ public static class YandexCloudExtensions
 				client.Timeout = TimeSpan.FromSeconds(30);
 				client.DefaultRequestHeaders.Authorization = new("Api-Key", options.ApiKey);
 			});
-			builder.Services.TryAddTransient<YandexSpeechKit>();
 			return builder;
 		}
 	}
